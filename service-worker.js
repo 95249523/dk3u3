@@ -1,4 +1,4 @@
-const CACHE = 'salary-ledger-v1';
+const CACHE = 'salary-ledger-v3';
 const ASSETS = ['./', './index.html', './manifest.webmanifest'];
 
 self.addEventListener('install', event => {
