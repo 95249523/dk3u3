@@ -7,6 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="manifest.webmanifest" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <title>薪資記帳</title>
   <style>
     :root { --ink:#17251f; --muted:#64736c; --paper:#fbfcf7; --card:#fff; --line:#e8eee9; --green:#25734f; --green-dark:#155039; --mint:#e6f4eb; --danger:#b64d43; --shadow:0 14px 38px rgba(30,72,50,.09); }
@@ -48,6 +49,8 @@
     .entry-form.open { display:block; }
     .record { padding:17px 3px; border-bottom:1px solid var(--line); display:grid; grid-template-columns:44px 1fr auto auto; align-items:center; gap:12px; }
     .record:last-child { border-bottom:0; }
+    .record.expense .icon { background:#fff0ed; }
+    .record.expense .amount { color:var(--danger); }
     .icon { width:42px; height:42px; display:grid; place-items:center; background:var(--mint); border-radius:13px; font-size:1.16rem; }
     .record-name { margin:0 0 3px; font-size:.96rem; font-weight:800; }
     .record-meta { margin:0; color:var(--muted); font-size:.8rem; }
@@ -56,6 +59,13 @@
     .delete:hover { background:#ffe3df; }
     .empty { color:var(--muted); text-align:center; padding:45px 15px; font-size:.93rem; }
     .hint { font-size:.78rem; line-height:1.55; color:var(--muted); margin:14px 0 0; }
+    .cloud { border:1px solid var(--line); background:#f6faf7; padding:15px; border-radius:14px; margin:-5px 0 18px; }
+    .cloud b { font-size:.9rem; } .cloud p { margin:5px 0 10px; color:var(--muted); font-size:.78rem; line-height:1.45; }
+    .cloud input { margin:5px 0; padding:9px 10px; font-size:.85rem; }
+    .cloud-actions { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-top:7px; }
+    .cloud button { padding:9px; font-size:.8rem; color:white; background:var(--green); }
+    .cloud button.alt { background:#e3ede6; color:var(--green-dark); }
+    .cloud .signed { display:flex; align-items:center; justify-content:space-between; gap:8px; }
     @media(max-width:760px) { .shell { padding:32px 16px 50px; } header { margin-bottom:25px; } .month-chip { display:none; } .overview,.content { grid-template-columns:1fr; } .balance { padding:24px; } .content { gap:16px; } .panel { padding:20px; } }
   </style>
 </head>
@@ -72,6 +82,7 @@
     <section class="content">
       <aside class="panel">
         <h2>固定入帳設定</h2>
+        <div class="cloud" id="cloudBox"></div>
         <div class="setting-status" id="settingStatus">尚未設定固定薪資</div>
         <form id="recurringForm">
           <label for="salaryName">項目名稱</label><input id="salaryName" maxlength="30" value="固定薪資" required />
@@ -82,9 +93,10 @@
         <p class="hint">開啟此頁時，系統會自動補上從開始日期至今尚未產生的薪資紀錄。</p>
       </aside>
       <section class="panel">
-        <div class="records-head"><h2>薪資紀錄</h2><button class="add-button" id="toggleAdd" type="button">＋ 手動新增</button></div>
+        <div class="records-head"><h2>收支紀錄</h2><button class="add-button" id="toggleAdd" type="button">＋ 手動新增</button></div>
         <form class="entry-form" id="manualForm">
-          <div class="grid2"><div><label for="manualName">名稱</label><input id="manualName" value="額外薪資" required /></div><div><label for="manualAmount">金額</label><input id="manualAmount" type="number" min="1" required /></div></div>
+          <div class="grid2"><div><label for="manualType">類型</label><select id="manualType"><option value="income">收入</option><option value="expense">支出</option></select></div><div><label for="manualAmount">金額</label><input id="manualAmount" type="number" min="1" required /></div></div>
+          <label for="manualName">名稱</label><input id="manualName" value="額外薪資" required />
           <label for="manualDate">入帳日期</label><input id="manualDate" type="date" required />
           <button class="primary" type="submit">新增這筆紀錄</button>
         </form>
@@ -94,6 +106,8 @@
   </main>
   <script>
     const key='salary-ledger-v1';
+    const db=window.supabase.createClient('https://ugwhvldmoathvjzyqybs.supabase.co','sb_publishable_EUpfa7d-mxPVhpOQix-65w_rQZHIQw9');
+    let user=null;
     const $=s=>document.querySelector(s); const fmt=n=>new Intl.NumberFormat('zh-TW',{style:'currency',currency:'TWD',maximumFractionDigits:0}).format(n);
     const dateString=d=>{ const x=new Date(d); x.setMinutes(x.getMinutes()-x.getTimezoneOffset()); return x.toISOString().slice(0,10); };
     let state=JSON.parse(localStorage.getItem(key)||'{"setting":null,"records":[]}');
@@ -101,18 +115,25 @@
     const now=new Date(); $('#today').textContent=now.toLocaleDateString('zh-TW',{year:'numeric',month:'long',day:'numeric'});
     $('#startDate').value=dateString(now); $('#manualDate').value=dateString(now);
     function addMonths(date,n){let d=new Date(date+'T00:00:00'); const day=d.getDate(); d.setMonth(d.getMonth()+n); if(d.getDate()!==day)d.setDate(0); return d;}
-    function autoAdd(){ if(!state.setting)return; const {name,amount,frequency,startDate}=state.setting; let d=new Date(startDate+'T00:00:00'), today=new Date(); today.setHours(23,59,59,999); let safety=0; while(d<=today&&safety++<1000){const day=dateString(d); const id='auto-'+day; if(!state.records.some(r=>r.id===id))state.records.push({id,name,amount:Number(amount),date:day,auto:true}); d=frequency==='monthly'?addMonths(day,1):new Date(d.getTime()+7*86400000); } save(); }
-    function render(){ autoAdd(); const records=[...state.records].sort((a,b)=>b.date.localeCompare(a.date)); const total=records.reduce((s,r)=>s+Number(r.amount),0); $('#total').textContent=fmt(total); $('#count').textContent=records.length+' 筆';
+    function autoAdd(){ if(!state.setting)return []; const added=[]; const {name,amount,frequency,startDate}=state.setting; let d=new Date(startDate+'T00:00:00'), today=new Date(); today.setHours(23,59,59,999); let safety=0; while(d<=today&&safety++<1000){const day=dateString(d); const id='auto-'+day; if(!state.records.some(r=>r.id===id)){const record={id,name,amount:Number(amount),date:day,auto:true,type:'income'};state.records.push(record);added.push(record);} d=frequency==='monthly'?addMonths(day,1):new Date(d.getTime()+7*86400000); } save(); return added; }
+    function render(){ const generated=autoAdd(); if(user) generated.forEach(saveRecord); renderCloud(); const records=[...state.records].sort((a,b)=>b.date.localeCompare(a.date)); const total=records.reduce((s,r)=>s+(r.type==='expense'?-Number(r.amount):Number(r.amount)),0); $('#total').textContent=fmt(total); $('#count').textContent=records.length+' 筆';
       if(state.setting){ const s=state.setting; $('#salaryName').value=s.name; $('#salaryAmount').value=s.amount; $('#frequency').value=s.frequency; $('#startDate').value=s.startDate; $('#settingStatus').innerHTML='<b>已啟用自動入帳</b>'+s.name+' · '+fmt(s.amount)+' · '+(s.frequency==='monthly'?'每月':'每週'); } else $('#settingStatus').textContent='尚未設定固定薪資';
-      $('#records').innerHTML=records.length?records.map(r=>`<article class="record"><div class="icon">${r.auto?'◒':'＋'}</div><div><p class="record-name">${escapeHtml(r.name)}</p><p class="record-meta">${new Date(r.date+'T00:00:00').toLocaleDateString('zh-TW',{year:'numeric',month:'short',day:'numeric'})}${r.auto?' · 自動入帳':''}</p></div><div class="amount">+${fmt(r.amount)}</div><button class="delete" data-id="${r.id}" title="刪除此筆">×</button></article>`).join(''):'<div class="empty">還沒有薪資紀錄<br>從左側設定固定薪資開始吧。</div>';
+      $('#records').innerHTML=records.length?records.map(r=>{const expense=r.type==='expense'; return `<article class="record ${expense?'expense':''}"><div class="icon">${expense?'−':r.auto?'◒':'＋'}</div><div><p class="record-name">${escapeHtml(r.name)}</p><p class="record-meta">${new Date(r.date+'T00:00:00').toLocaleDateString('zh-TW',{year:'numeric',month:'short',day:'numeric'})}${r.auto?' · 自動入帳':expense?' · 支出':' · 收入'}</p></div><div class="amount">${expense?'−':'+'}${fmt(r.amount)}</div><button class="delete" data-id="${r.id}" title="刪除此筆">×</button></article>`}).join(''):'<div class="empty">還沒有收支紀錄<br>從左側設定固定薪資開始吧。</div>';
     }
     function escapeHtml(v){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
-    $('#recurringForm').addEventListener('submit',e=>{e.preventDefault(); state.setting={name:$('#salaryName').value.trim(),amount:$('#salaryAmount').value,frequency:$('#frequency').value,startDate:$('#startDate').value}; save(); render();});
+    $('#recurringForm').addEventListener('submit',async e=>{e.preventDefault(); state.setting={name:$('#salaryName').value.trim(),amount:$('#salaryAmount').value,frequency:$('#frequency').value,startDate:$('#startDate').value}; save(); if(user) await db.from('recurring_settings').upsert({user_id:user.id,name:state.setting.name,amount:Number(state.setting.amount),frequency:state.setting.frequency,start_date:state.setting.startDate}); render();});
     $('#toggleAdd').onclick=()=>$('#manualForm').classList.toggle('open');
-    $('#manualForm').addEventListener('submit',e=>{e.preventDefault(); state.records.push({id:'manual-'+Date.now(),name:$('#manualName').value.trim(),amount:Number($('#manualAmount').value),date:$('#manualDate').value,auto:false}); save(); e.target.reset(); $('#manualDate').value=dateString(new Date()); e.target.classList.remove('open'); render();});
-    $('#records').addEventListener('click',e=>{const b=e.target.closest('.delete'); if(!b)return; state.records=state.records.filter(r=>r.id!==b.dataset.id); save(); render();});
-    render();
+    $('#manualType').addEventListener('change',e=>$('#manualName').value=e.target.value==='expense'?'日常支出':'額外薪資');
+    $('#manualForm').addEventListener('submit',async e=>{e.preventDefault(); const record={id:'manual-'+Date.now(),name:$('#manualName').value.trim(),amount:Number($('#manualAmount').value),date:$('#manualDate').value,type:$('#manualType').value,auto:false};state.records.push(record);save();if(user)await saveRecord(record);e.target.reset();$('#manualType').value='income';$('#manualName').value='額外薪資';$('#manualDate').value=dateString(new Date());e.target.classList.remove('open');render();});
+    $('#records').addEventListener('click',async e=>{const b=e.target.closest('.delete');if(!b)return;const record=state.records.find(r=>r.id===b.dataset.id);if(user&&record?.remoteId)await db.from('ledger_records').delete().eq('id',record.remoteId);state.records=state.records.filter(r=>r.id!==b.dataset.id);save();render();});
+    async function saveRecord(r){const {data,error}=await db.from('ledger_records').insert({user_id:user.id,name:r.name,amount:Number(r.amount),record_date:r.date,entry_type:r.type||'income',is_automatic:!!r.auto}).select().single();if(!error&&data)r.remoteId=data.id;save();}
+    function renderCloud(){const box=$('#cloudBox');if(user){box.innerHTML=`<div class="signed"><div><b>☁ 已啟用雲端同步</b><p>${escapeHtml(user.email)}</p></div><button class="alt" id="signOut" type="button">登出</button></div>`;$('#signOut').onclick=async()=>{await db.auth.signOut();user=null;render();};}else box.innerHTML=`<b>☁ 雲端備份</b><p>登入後，紀錄會安全備份並可在新手機復原。</p><input id="authEmail" type="email" placeholder="電子郵件" /><input id="authPassword" type="password" placeholder="密碼（至少 6 個字元）" /><div class="cloud-actions"><button id="signIn" type="button">登入</button><button class="alt" id="signUp" type="button">建立帳號</button></div><p id="authMessage"></p>`;if(!user){$('#signIn').onclick=()=>auth('in');$('#signUp').onclick=()=>auth('up');}}
+    async function auth(mode){const email=$('#authEmail').value.trim(),password=$('#authPassword').value;if(!email||password.length<6){$('#authMessage').textContent='請輸入電子郵件與至少 6 個字元的密碼。';return;}const result=mode==='in'?await db.auth.signInWithPassword({email,password}):await db.auth.signUp({email,password});if(result.error){$('#authMessage').textContent=result.error.message;return;}if(!result.data.session){$('#authMessage').textContent='帳號已建立，請到電子郵件信箱完成驗證後再登入。';return;}user=result.data.session.user;await loadCloud();}
+    async function loadCloud(){const [recordsResult,settingResult]=await Promise.all([db.from('ledger_records').select('*').order('record_date',{ascending:false}),db.from('recurring_settings').select('*').maybeSingle()]);if(recordsResult.data)state.records=recordsResult.data.map(r=>({id:r.is_automatic?'auto-'+r.record_date:r.id,remoteId:r.id,name:r.name,amount:Number(r.amount),date:r.record_date,type:r.entry_type,auto:r.is_automatic}));if(settingResult.data)state.setting={name:settingResult.data.name,amount:settingResult.data.amount,frequency:settingResult.data.frequency,startDate:settingResult.data.start_date};save();render();}
+    (async()=>{const {data:{session}}=await db.auth.getSession();if(session){user=session.user;await loadCloud();}else render();})();
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js');
   </script>
 </body>
+</html>
+
 </html>
