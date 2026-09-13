@@ -1,0 +1,9 @@
+{
+  "name": "薪資記帳",
+  "short_name": "薪資記帳",
+  "description": "簡單記錄固定與手動新增的薪資收入。",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#fbfcf7",
+  "theme_color": "#155039"
+}

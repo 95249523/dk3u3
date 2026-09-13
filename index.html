@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#155039" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <title>薪資記帳</title>
+  <style>
+    :root { --ink:#17251f; --muted:#64736c; --paper:#fbfcf7; --card:#fff; --line:#e8eee9; --green:#25734f; --green-dark:#155039; --mint:#e6f4eb; --danger:#b64d43; --shadow:0 14px 38px rgba(30,72,50,.09); }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:"Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif; color:var(--ink); background:linear-gradient(135deg,#f4f8f2 0%,#fbfcf7 48%,#eef8f1 100%); min-height:100vh; }
+    .shell { max-width:1080px; padding:48px 24px 72px; margin:auto; }
+    header { display:flex; justify-content:space-between; align-items:flex-start; gap:18px; margin-bottom:34px; }
+    .eyebrow { display:flex; gap:9px; align-items:center; color:var(--green); font-size:.85rem; font-weight:800; letter-spacing:.08em; }
+    .dot { width:9px; height:9px; background:#5ab681; border-radius:99px; box-shadow:0 0 0 5px #d8f0e0; }
+    h1 { font-size:clamp(2rem,5vw,3.35rem); margin:9px 0 7px; letter-spacing:-.065em; line-height:1.05; }
+    .subtitle { color:var(--muted); margin:0; font-size:1rem; }
+    .month-chip { padding:11px 15px; background:#fff; border:1px solid var(--line); border-radius:999px; color:var(--muted); font-size:.9rem; white-space:nowrap; }
+    .overview { display:grid; grid-template-columns:1.6fr 1fr; gap:18px; margin-bottom:22px; }
+    .balance { background:var(--green-dark); color:white; border-radius:24px; padding:27px 30px; box-shadow:0 16px 30px rgba(21,80,57,.2); position:relative; overflow:hidden; }
+    .balance:after { content:""; position:absolute; width:230px; height:230px; right:-80px; top:-110px; border-radius:50%; border:1px solid rgba(255,255,255,.18); box-shadow:0 0 0 35px rgba(255,255,255,.05),0 0 0 70px rgba(255,255,255,.04); }
+    .label { display:block; font-size:.87rem; opacity:.75; margin-bottom:9px; }
+    #total { font-size:clamp(2rem,5vw,3.35rem); font-weight:800; letter-spacing:-.07em; position:relative; z-index:1; }
+    .total-note { margin:11px 0 0; font-size:.9rem; opacity:.8; position:relative; z-index:1; }
+    .stat { background:var(--card); border:1px solid var(--line); padding:24px 25px; border-radius:24px; box-shadow:var(--shadow); display:flex; flex-direction:column; justify-content:center; }
+    .stat strong { font-size:2rem; letter-spacing:-.05em; }
+    .stat small { color:var(--muted); margin-top:6px; }
+    .content { display:grid; grid-template-columns:360px 1fr; gap:22px; align-items:start; }
+    .panel { background:rgba(255,255,255,.86); border:1px solid var(--line); border-radius:22px; padding:24px; box-shadow:var(--shadow); }
+    h2 { margin:0 0 20px; font-size:1.1rem; letter-spacing:-.03em; }
+    .setting-status { background:var(--mint); color:var(--green-dark); padding:13px 14px; border-radius:12px; line-height:1.55; font-size:.88rem; margin:-5px 0 19px; }
+    .setting-status b { display:block; }
+    label { display:block; color:#405148; font-size:.82rem; font-weight:700; margin:15px 0 7px; }
+    input, select { appearance:none; width:100%; border:1px solid #dbe5de; background:#fff; border-radius:10px; padding:12px 13px; color:var(--ink); font:inherit; outline:none; }
+    input:focus,select:focus { border-color:#65a986; box-shadow:0 0 0 3px #dff1e5; }
+    .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:11px; }
+    button { border:0; font:inherit; font-weight:800; cursor:pointer; border-radius:11px; transition:.18s ease; }
+    .primary { width:100%; color:white; background:var(--green); padding:13px; margin-top:20px; }
+    .primary:hover { background:var(--green-dark); transform:translateY(-1px); }
+    .records-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:16px; }
+    .records-head h2 { margin:0; }
+    .add-button { color:var(--green); background:var(--mint); padding:9px 12px; font-size:.85rem; }
+    .add-button:hover { background:#d4eedc; }
+    .entry-form { border-bottom:1px solid var(--line); padding-bottom:19px; margin-bottom:5px; display:none; }
+    .entry-form.open { display:block; }
+    .record { padding:17px 3px; border-bottom:1px solid var(--line); display:grid; grid-template-columns:44px 1fr auto auto; align-items:center; gap:12px; }
+    .record:last-child { border-bottom:0; }
+    .icon { width:42px; height:42px; display:grid; place-items:center; background:var(--mint); border-radius:13px; font-size:1.16rem; }
+    .record-name { margin:0 0 3px; font-size:.96rem; font-weight:800; }
+    .record-meta { margin:0; color:var(--muted); font-size:.8rem; }
+    .amount { font-weight:850; letter-spacing:-.03em; white-space:nowrap; }
+    .delete { color:#ad5c54; background:#fff2f0; width:30px; height:30px; font-size:1.15rem; line-height:1; }
+    .delete:hover { background:#ffe3df; }
+    .empty { color:var(--muted); text-align:center; padding:45px 15px; font-size:.93rem; }
+    .hint { font-size:.78rem; line-height:1.55; color:var(--muted); margin:14px 0 0; }
+    @media(max-width:760px) { .shell { padding:32px 16px 50px; } header { margin-bottom:25px; } .month-chip { display:none; } .overview,.content { grid-template-columns:1fr; } .balance { padding:24px; } .content { gap:16px; } .panel { padding:20px; } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div><div class="eyebrow"><span class="dot"></span> PERSONAL PAYROLL</div><h1>薪資記帳</h1><p class="subtitle">穩穩記下每一次努力的收入。</p></div>
+      <div class="month-chip" id="today"></div>
+    </header>
+    <section class="overview">
+      <div class="balance"><span class="label">累計薪資收入</span><div id="total">$0</div><p class="total-note">已記錄的所有薪資總額</p></div>
+      <div class="stat"><strong id="count">0 筆</strong><small>薪資紀錄</small></div>
+    </section>
+    <section class="content">
+      <aside class="panel">
+        <h2>固定入帳設定</h2>
+        <div class="setting-status" id="settingStatus">尚未設定固定薪資</div>
+        <form id="recurringForm">
+          <label for="salaryName">項目名稱</label><input id="salaryName" maxlength="30" value="固定薪資" required />
+          <label for="salaryAmount">每次金額</label><input id="salaryAmount" type="number" min="1" placeholder="例如：45000" required />
+          <div class="grid2"><div><label for="frequency">入帳週期</label><select id="frequency"><option value="monthly">每月</option><option value="weekly">每週</option></select></div><div><label for="startDate">開始日期</label><input id="startDate" type="date" required /></div></div>
+          <button class="primary" type="submit">儲存並更新紀錄</button>
+        </form>
+        <p class="hint">開啟此頁時，系統會自動補上從開始日期至今尚未產生的薪資紀錄。</p>
+      </aside>
+      <section class="panel">
+        <div class="records-head"><h2>薪資紀錄</h2><button class="add-button" id="toggleAdd" type="button">＋ 手動新增</button></div>
+        <form class="entry-form" id="manualForm">
+          <div class="grid2"><div><label for="manualName">名稱</label><input id="manualName" value="額外薪資" required /></div><div><label for="manualAmount">金額</label><input id="manualAmount" type="number" min="1" required /></div></div>
+          <label for="manualDate">入帳日期</label><input id="manualDate" type="date" required />
+          <button class="primary" type="submit">新增這筆紀錄</button>
+        </form>
+        <div id="records"></div>
+      </section>
+    </section>
+  </main>
+  <script>
+    const key='salary-ledger-v1';
+    const $=s=>document.querySelector(s); const fmt=n=>new Intl.NumberFormat('zh-TW',{style:'currency',currency:'TWD',maximumFractionDigits:0}).format(n);
+    const dateString=d=>{ const x=new Date(d); x.setMinutes(x.getMinutes()-x.getTimezoneOffset()); return x.toISOString().slice(0,10); };
+    let state=JSON.parse(localStorage.getItem(key)||'{"setting":null,"records":[]}');
+    const save=()=>localStorage.setItem(key,JSON.stringify(state));
+    const now=new Date(); $('#today').textContent=now.toLocaleDateString('zh-TW',{year:'numeric',month:'long',day:'numeric'});
+    $('#startDate').value=dateString(now); $('#manualDate').value=dateString(now);
+    function addMonths(date,n){let d=new Date(date+'T00:00:00'); const day=d.getDate(); d.setMonth(d.getMonth()+n); if(d.getDate()!==day)d.setDate(0); return d;}
+    function autoAdd(){ if(!state.setting)return; const {name,amount,frequency,startDate}=state.setting; let d=new Date(startDate+'T00:00:00'), today=new Date(); today.setHours(23,59,59,999); let safety=0; while(d<=today&&safety++<1000){const day=dateString(d); const id='auto-'+day; if(!state.records.some(r=>r.id===id))state.records.push({id,name,amount:Number(amount),date:day,auto:true}); d=frequency==='monthly'?addMonths(day,1):new Date(d.getTime()+7*86400000); } save(); }
+    function render(){ autoAdd(); const records=[...state.records].sort((a,b)=>b.date.localeCompare(a.date)); const total=records.reduce((s,r)=>s+Number(r.amount),0); $('#total').textContent=fmt(total); $('#count').textContent=records.length+' 筆';
+      if(state.setting){ const s=state.setting; $('#salaryName').value=s.name; $('#salaryAmount').value=s.amount; $('#frequency').value=s.frequency; $('#startDate').value=s.startDate; $('#settingStatus').innerHTML='<b>已啟用自動入帳</b>'+s.name+' · '+fmt(s.amount)+' · '+(s.frequency==='monthly'?'每月':'每週'); } else $('#settingStatus').textContent='尚未設定固定薪資';
+      $('#records').innerHTML=records.length?records.map(r=>`<article class="record"><div class="icon">${r.auto?'◒':'＋'}</div><div><p class="record-name">${escapeHtml(r.name)}</p><p class="record-meta">${new Date(r.date+'T00:00:00').toLocaleDateString('zh-TW',{year:'numeric',month:'short',day:'numeric'})}${r.auto?' · 自動入帳':''}</p></div><div class="amount">+${fmt(r.amount)}</div><button class="delete" data-id="${r.id}" title="刪除此筆">×</button></article>`).join(''):'<div class="empty">還沒有薪資紀錄<br>從左側設定固定薪資開始吧。</div>';
+    }
+    function escapeHtml(v){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
+    $('#recurringForm').addEventListener('submit',e=>{e.preventDefault(); state.setting={name:$('#salaryName').value.trim(),amount:$('#salaryAmount').value,frequency:$('#frequency').value,startDate:$('#startDate').value}; save(); render();});
+    $('#toggleAdd').onclick=()=>$('#manualForm').classList.toggle('open');
+    $('#manualForm').addEventListener('submit',e=>{e.preventDefault(); state.records.push({id:'manual-'+Date.now(),name:$('#manualName').value.trim(),amount:Number($('#manualAmount').value),date:$('#manualDate').value,auto:false}); save(); e.target.reset(); $('#manualDate').value=dateString(new Date()); e.target.classList.remove('open'); render();});
+    $('#records').addEventListener('click',e=>{const b=e.target.closest('.delete'); if(!b)return; state.records=state.records.filter(r=>r.id!==b.dataset.id); save(); render();});
+    render();
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js');
+  </script>
+</body>
+</html>
